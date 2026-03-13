@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fsspec-scoutfs"
+version = "0.1.0"
+description = "fsspec filesystem implementation for ScoutFS with tape staging support"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "Paul Gierz", email = "paul.gierz@awi.de" }
+]
+keywords = ["fsspec", "scoutfs", "tape", "hsm", "hierarchical-storage"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Filesystems",
+]
+dependencies = [
+    "fsspec[ssh]>=2023.1.0",
+    "requests>=2.28.0",
+    "loguru>=0.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+]
+rich = [
+    "rich>=13.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/pgierz/fsspec-scoutfs"
+Repository = "https://github.com/pgierz/fsspec-scoutfs"
+Issues = "https://github.com/pgierz/fsspec-scoutfs/issues"
+
+[project.entry-points."fsspec.specs"]
+scoutfs = "fsspec_scoutfs:ScoutFSFileSystem"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fsspec_scoutfs"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

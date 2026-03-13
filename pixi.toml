@@ -1,0 +1,31 @@
+[project]
+name = "fsspec-scoutfs"
+version = "0.1.0"
+description = "fsspec filesystem implementation for ScoutFS with tape staging support"
+authors = ["Paul Gierz <paul.gierz@awi.de>"]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64", "osx-64"]
+
+[tasks]
+test = "pytest tests/"
+lint = "ruff check src/"
+format = "ruff format src/"
+
+[dependencies]
+python = ">=3.9"
+fsspec = ">=2023.1.0"
+paramiko = ">=2.10.0"
+requests = ">=2.28.0"
+loguru = ">=0.7.0"
+
+[feature.dev.dependencies]
+pytest = ">=7.0"
+pytest-cov = ">=4.0"
+ruff = ">=0.1.0"
+
+[feature.rich.dependencies]
+rich = ">=13.0.0"
+
+[environments]
+default = { features = ["dev"], solve-group = "default" }
+dev = { features = ["dev", "rich"], solve-group = "default" }
