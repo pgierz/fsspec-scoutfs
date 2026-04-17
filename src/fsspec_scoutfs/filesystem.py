@@ -160,8 +160,44 @@ class ScoutFSFileSystem(fsspec.implementations.sftp.SFTPFileSystem):
         response.raise_for_status()
         return response.json()
 
+    def _resolve_path(self, path: str) -> str:
+        """Resolve symlinks in a remote path via SFTP realpath.
+
+        Uses the paramiko SFTPClient.normalize() call which invokes
+        realpath on the server. Results are cached to avoid repeated
+        round-trips for paths under the same prefix.
+
+        Args:
+            path: The remote file path (may contain symlinks)
+
+        Returns:
+            str: The fully resolved path
+        """
+        if not hasattr(self, "_resolve_cache"):
+            self._resolve_cache: Dict[str, str] = {}
+
+        if path in self._resolve_cache:
+            return self._resolve_cache[path]
+
+        try:
+            resolved = self.ftp.normalize(path)
+        except (OSError, IOError):
+            # If normalize fails (e.g. file doesn't exist yet), return as-is
+            resolved = path
+
+        self._resolve_cache[path] = resolved
+
+        if resolved != path:
+            logger.debug("Resolved symlink: {} -> {}", path, resolved)
+
+        return resolved
+
     def _get_fsid_for_path(self, path: str) -> str:
         """Get the filesystem ID for a given path.
+
+        Resolves symlinks via SFTP before matching against ScoutFS mount
+        points, so paths like ``/hs/projects/...`` (symlink) correctly
+        match mounts like ``/hs/D-P/...`` (real path).
 
         Args:
             path: The file path to look up
@@ -172,19 +208,25 @@ class ScoutFSFileSystem(fsspec.implementations.sftp.SFTPFileSystem):
         Raises:
             ValueError: If no matching filesystem is found or multiple match
         """
+        resolved_path = self._resolve_path(path)
+
         fsid_response = self._scoutfs_get_filesystems()
         matching_fsids = []
         for fsid_info in fsid_response.get("fsids", []):
-            if path.startswith(fsid_info["mount"]):
+            if resolved_path.startswith(fsid_info["mount"]):
                 matching_fsids.append(fsid_info)
 
         if len(matching_fsids) == 0:
             raise ValueError(
-                f"No ScoutFS filesystem found for path '{path}'. "
+                f"No ScoutFS filesystem found for path '{path}' "
+                f"(resolved: '{resolved_path}'). "
                 f"Available mounts: {[f['mount'] for f in fsid_response.get('fsids', [])]}"
             )
         elif len(matching_fsids) > 1:
-            raise ValueError(f"Multiple ScoutFS filesystems match path '{path}': {matching_fsids}")
+            raise ValueError(
+                f"Multiple ScoutFS filesystems match path '{path}' "
+                f"(resolved: '{resolved_path}'): {matching_fsids}"
+            )
 
         return matching_fsids[0]["fsid"]
 
@@ -192,11 +234,12 @@ class ScoutFSFileSystem(fsspec.implementations.sftp.SFTPFileSystem):
         """Get file information from the ScoutFS API.
 
         Args:
-            path: Path to the file
+            path: Path to the file (symlinks are resolved automatically)
 
         Returns:
             dict: File information including online/offline status
         """
+        resolved = self._resolve_path(path)
         fsid = self._get_fsid_for_path(path)
         headers = {
             "Accept": "application/json",
@@ -205,7 +248,7 @@ class ScoutFSFileSystem(fsspec.implementations.sftp.SFTPFileSystem):
         }
         with self._filtered_warnings():
             response = requests.get(
-                f"{self._scoutfs_api_url}/file?fsid={fsid}&path={path}",
+                f"{self._scoutfs_api_url}/file?fsid={fsid}&path={resolved}",
                 headers=headers,
                 verify=False,
                 timeout=30,
@@ -218,11 +261,12 @@ class ScoutFSFileSystem(fsspec.implementations.sftp.SFTPFileSystem):
 
         Args:
             command: The API command (e.g., "stage", "release")
-            path: Path to the file
+            path: Path to the file (symlinks are resolved automatically)
 
         Returns:
             dict: API response
         """
+        resolved = self._resolve_path(path)
         fsid = self._get_fsid_for_path(path)
         headers = {
             "Accept": "application/json",
@@ -231,9 +275,9 @@ class ScoutFSFileSystem(fsspec.implementations.sftp.SFTPFileSystem):
         }
         with self._filtered_warnings():
             response = requests.post(
-                f"{self._scoutfs_api_url}/request/{command}?fsid={fsid}&path={path}",
+                f"{self._scoutfs_api_url}/request/{command}?fsid={fsid}&path={resolved}",
                 headers=headers,
-                json={"path": path},
+                json={"path": resolved},
                 verify=False,
                 timeout=30,
             )
