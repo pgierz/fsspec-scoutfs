@@ -487,15 +487,17 @@ class ScoutFSFileSystem(fsspec.implementations.sftp.SFTPFileSystem):
 
         self.stage(path)
 
-        timeout_dt = datetime.datetime.now() + datetime.timedelta(
-            seconds=timeout if timeout is not None else 180
+        timeout_dt = (
+            datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+            if timeout is not None
+            else None
         )
 
         while True:
             if self.is_online(path):
                 break
 
-            if datetime.datetime.now() > timeout_dt:
+            if timeout_dt is not None and datetime.datetime.now() > timeout_dt:
                 raise TimeoutError(f"Timeout while waiting for file {path} to be staged")
 
             if callback:
